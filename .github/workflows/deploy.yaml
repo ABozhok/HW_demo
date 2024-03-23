@@ -18,23 +18,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ansible
 
-      - name: Run Ansible Playbook
+      - name: Run Ansible Playbook locally
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          REMOTE_USER: ${{ secrets.REMOTE_USER }}
-          REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_NAME: ${{ secrets.DB_NAME }}
-          DB_USER: ${{ secrets.DB_USER }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
         run: |
-              echo "$SSH_PRIVATE_KEY" > private_key
-              chmod 600 private_key
+          echo "$SSH_PRIVATE_KEY" > private_key
+          chmod 600 private_key
 
-              scp -o StrictHostKeyChecking=no -i private_key -r ./ansible $REMOTE_USER@$REMOTE_HOST:/home/ubuntu/
-
-              ssh -o StrictHostKeyChecking=no -i private_key $REMOTE_USER@$REMOTE_HOST \
-              "ansible-playbook /home/ubuntu/ansible/playbook.yml -i hosts, \
-              --extra-vars 'db_host=${DB_HOST} db_name=${DB_NAME} db_user=${DB_USER} db_password=${DB_PASSWORD}'"
-    
-              rm -f private_key
+          ansible-playbook ansible/playbook.yml -i ansible/inventory.yaml \
+          --extra-vars "ansible_ssh_private_key_file=./private_key"
+          
+          rm -f private_key
