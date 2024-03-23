@@ -1,0 +1,48 @@
+name: Deploy
+on:
+  workflow_run:
+    workflows: ["Tests"]
+    types:
+      - completed
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Setup Ansible
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ansible
+
+      - name: Copy code to remote host
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.REMOTE_HOST }}
+          username: ${{ secrets.REMOTE_USERNAME }}
+          key: ${{ secrets.DEVOPS_STUDY }}
+          source: "/ansible"
+          target: "/home/ubuntu/ansible"
+
+      - name: Run Ansible Playbook
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          REMOTE_USER: ${{ secrets.REMOTE_USER }}
+          REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          echo "$SSH_PRIVATE_KEY" > private_key
+          chmod 600 private_key
+
+          ssh -o StrictHostKeyChecking=no -i private_key $REMOTE_USER@$REMOTE_HOST \
+          "ansible-playbook /home/ubuntu/ansible/playbook.yml -i $REMOTE_HOST,\
+          --extra-vars 'db_host=${DB_HOST} db_name=${DB_NAME} db_user=${DB_USER} \
+          db_password=${DB_PASSWORD}'"
+          
+          rm -f private_key

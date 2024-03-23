@@ -1,0 +1,14 @@
+- name: Deploy symfony
+  hosts: all
+  become: yes
+  vars:
+    db_host: "{{ db_host }}"
+    db_name: "{{ db_name }}"
+    db_user: "{{ db_user }}"
+    db_password: "{{ db_password }}"
+    ansible_python_interpreter: /usr/bin/python3
+    project_root: "/var/www/demo"
+
+  roles:
+    - composer
+    - symfony

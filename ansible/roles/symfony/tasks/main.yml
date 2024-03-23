@@ -1,0 +1,58 @@
+- name: Clone symfony/demo
+  ansible.builtin.git:
+    repo: 'https://github.com/ABozhok/HW_demo'
+    dest: /var/www/demo
+    accept_hostkey: true
+    force: true
+  become: yes
+
+- name: Change ownership to ubuntu and group to www-data
+  file:
+    path: /var/www/demo
+    state: directory
+    recurse: yes
+    owner: ubuntu
+    group: www-data
+  become: yes
+
+- name: Update .env for DATABASE_URL
+  ansible.builtin.replace:
+    path: /var/www/demo/.env
+    regexp: "{{ item.regexp }}"
+    replace: "{{ item.replace }}"
+  loop:
+    - regexp: '^DATABASE_URL=sqlite.*'
+      replace: 'DATABASE_URL=mysql://{{ db_user }}:{{ db_password }}@{{ db_host }}:3306/{{ db_name }}'
+  vars:
+    db_host: "{{ db_host }}"
+    db_name: "{{ db_name }}"
+    db_user: "{{ db_user }}"
+    db_password: "{{ db_password }}"
+
+- name: Ensure vendor directory exists
+  file:
+    path: /var/www/demo/vendor
+    state: directory
+    owner: ubuntu
+    group: www-data
+  become: yes
+
+- name: composer install
+  become: yes
+  become_user: ubuntu
+  shell:
+    cmd: composer install --no-interaction
+    chdir: /var/www/demo
+
+- name: Check schema
+  shell:
+    cmd: php bin/console doctrine:schema:validate
+    chdir: /var/www/demo
+  register: schema_validate
+  ignore_errors: true
+
+- name: Run migration
+  shell:
+    cmd: php bin/console doctrine:schema:create
+    chdir: /var/www/demo
+  when: schema_validate.rc == 2
