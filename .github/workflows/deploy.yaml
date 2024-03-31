@@ -20,7 +20,7 @@ jobs:
         run: |
           IP=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=lemp-stack" \
           "Name=instance-state-name,Values=running" --query "Reservations[].Instances[].PublicIpAddress" --output text)
-          echo "::set-output name=INSTANCE_IP::$IP"
+          echo "INSTANCE_IP=$IP" >> $GITHUB_ENV
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -38,7 +38,7 @@ jobs:
           DB_USER: ${{ secrets.DB_USER }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
         run: |
-          ansible-playbook ansible/deploy.yml -i ${{ steps.ec2-ip.outputs.INSTANCE_IP }}, \
-          --extra-vars "ansible_host=${{ steps.ec2-ip.outputs.INSTANCE_IP }} ansible_user=ubuntu db_host=$DB_HOST \
+          ansible-playbook ansible/deploy.yml -i $INSTANCE_IP, \
+          --extra-vars "ansible_host=$INSTANCE_IP ansible_user=ubuntu db_host=$DB_HOST \
           db_name=$DB_NAME db_user=$DB_USER db_password=$DB_PASSWORD" \
           --ssh-common-args='-o StrictHostKeyChecking=no'
