@@ -1,4 +1,4 @@
-name: Deploy
+name: Deploy to AWS EC2
 on:
   workflow_run:
     workflows: ["Tests"]
@@ -8,33 +8,48 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    if: github.event.workflow_run.conclusion == 'success'
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Setup Ansible
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ansible
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
 
-      - name: Run Ansible Playbook locally
+      - name: Install AWS CLI
+        run: |
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip
+          sudo ./aws/install
+
+      - name: Get EC2 Instance IP
+        id: ec2-ip
+        run: |
+          IP=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=lemp-stack" \
+          "Name=instance-state-name,Values=running" --query "Reservations[].Instances[].PublicIpAddress" --output text)
+          echo "::set-output name=INSTANCE_IP::$IP"
         env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
-          REMOTE_USER: ${{ secrets.REMOTE_USER }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: 'eu-west-1'
+
+      - name: Set up SSH Agent
+        uses: webfactory/ssh-agent@v0.5.3
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Run Ansible Playbook
+        env:
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_NAME: ${{ secrets.DB_NAME }}
           DB_USER: ${{ secrets.DB_USER }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
         run: |
-          echo "$SSH_PRIVATE_KEY" > private_key
-          chmod 600 private_key
-
-          ansible-playbook ansible/playbook.yml -i ansible/inventory.yaml \
-          --extra-vars "ansible_ssh_private_key_file=./private_key \
-          ansible_host=$REMOTE_HOST ansible_user=$REMOTE_USER db_host=$DB_HOST \
+          ansible-playbook ansible/deploy.yml -i ${{ steps.ec2-ip.outputs.INSTANCE_IP }}, \
+          --extra-vars "ansible_host=${{ steps.ec2-ip.outputs.INSTANCE_IP }} ansible_user=ubuntu db_host=$DB_HOST \
           db_name=$DB_NAME db_user=$DB_USER db_password=$DB_PASSWORD" \
           --ssh-common-args='-o StrictHostKeyChecking=no'
-          
-          rm -f private_key

@@ -1,0 +1,13 @@
+- name: Deploy to AWS EC2 instance
+  hosts: all
+  become: true
+  tasks:
+    - name: Stop current Docker containers
+      ansible.builtin.shell: docker-compose down
+      args:
+        chdir: /home/ubuntu/
+
+    - name: Rebuild and restart Docker containers
+      ansible.builtin.shell: docker-compose up --build -d
+      args:
+        chdir: /home/ubuntu/
